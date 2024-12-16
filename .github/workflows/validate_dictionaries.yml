@@ -1,0 +1,18 @@
+name: Validate Medical Dictionaries
+
+on:
+  push:
+    paths:
+      - 'data/dictionaries/**'
+      - 'data/patterns/**'
+  pull_request:
+    paths:
+      - 'data/dictionaries/**'
+      - 'data/patterns/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      [... rest of the workflow ...]
