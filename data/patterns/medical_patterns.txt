@@ -1,0 +1,7 @@
+# Medical Term Patterns
+# Format: pattern description followed by regex pattern
+
+# Prefixes
+гипер[а-я]+          # Terms starting with "гипер"
+гипо[а-я]+           # Terms starting with "гипо"
+[More patterns continue...]
