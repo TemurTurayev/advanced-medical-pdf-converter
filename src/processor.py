@@ -1,9 +1,9 @@
 from typing import Dict, List, Optional
 from PIL import Image
 import numpy as np
-from .plugin_manager import PluginManager
-from .cache import ResultCache
-from .errors import ProcessingError
+from src.plugin_manager import PluginManager
+from src.cache import ResultCache
+from src.errors import ProcessingError
 
 class DocumentProcessor:
     def __init__(self):
@@ -21,10 +21,10 @@ class DocumentProcessor:
         try:
             # Convert to numpy array for OpenCV operations
             np_image = np.array(image)
+            image_bytes = image.tobytes()
             
             # Check cache
-            cache_key = self.cache.get_cache_key(image.tobytes(), context)
-            cached_result = self.cache.get(cache_key)
+            cached_result = self.cache.get(image_bytes, context)
             if cached_result:
                 return cached_result
             
@@ -32,7 +32,7 @@ class DocumentProcessor:
             results = self.plugin_manager.process_content(np_image, context)
             
             # Cache results
-            self.cache.set(cache_key, results)
+            self.cache.set(image_bytes, results, context)
             
             return results
         except Exception as e:

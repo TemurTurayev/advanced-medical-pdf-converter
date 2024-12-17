@@ -9,7 +9,7 @@ class ResultCache:
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
     
-    def get_cache_key(self, content: bytes, context: Dict = None) -> str:
+    def _calculate_key(self, content: bytes, context: Dict = None) -> str:
         """Generate cache key from content and context"""
         hasher = hashlib.sha256(content)
         if context:
@@ -17,16 +17,22 @@ class ResultCache:
         return hasher.hexdigest()
     
     @st.cache_data(ttl=3600)
-    def get(self, key: str) -> Any:
-        """Get cached result"""
-        cache_file = os.path.join(self.cache_dir, f'{key}.json')
+    def _get_cached(key: str) -> Any:
+        """Get cached result - static method for caching"""
+        cache_file = os.path.join('.cache', f'{key}.json')
         if os.path.exists(cache_file):
             with open(cache_file, 'r') as f:
                 return json.load(f)
         return None
+
+    def get(self, content: bytes, context: Dict = None) -> Any:
+        """Get result from cache"""
+        key = self._calculate_key(content, context)
+        return self._get_cached(key)
     
-    def set(self, key: str, value: Any):
+    def set(self, content: bytes, value: Any, context: Dict = None):
         """Cache result"""
+        key = self._calculate_key(content, context)
         cache_file = os.path.join(self.cache_dir, f'{key}.json')
         with open(cache_file, 'w') as f:
             json.dump(value, f)
