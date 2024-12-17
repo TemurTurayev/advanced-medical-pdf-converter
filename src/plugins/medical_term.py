@@ -1,5 +1,5 @@
 from .base import BasePlugin
-from typing import Dict, List
+from typing import Dict, List, Union
 import re
 
 class MedicalTermPlugin(BasePlugin):
@@ -7,17 +7,25 @@ class MedicalTermPlugin(BasePlugin):
         super().__init__()
         self.medical_terms = self._load_medical_terms()
 
-    def process(self, content: str, context: Dict = None) -> Dict:
+    def process(self, content: Union[str, bytes], context: Dict = None) -> Dict:
+        if isinstance(content, bytes):
+            content = content.decode('utf-8', errors='ignore')
+            
         found_terms = []
         for term in self.medical_terms:
-            matches = re.finditer(term['pattern'], content, re.IGNORECASE)
-            for match in matches:
-                found_terms.append({
-                    'term': match.group(),
-                    'position': match.start(),
-                    'category': term['category'],
-                    'description': term.get('description', '')
-                })
+            try:
+                matches = re.finditer(term['pattern'], content, re.IGNORECASE)
+                for match in matches:
+                    found_terms.append({
+                        'term': match.group(),
+                        'position': match.start(),
+                        'category': term['category'],
+                        'description': term.get('description', '')
+                    })
+            except Exception as e:
+                print(f'Error processing term {term["pattern"]}: {str(e)}')
+                continue
+                
         return {'terms': found_terms}
 
     def _load_medical_terms(self) -> List[Dict]:
