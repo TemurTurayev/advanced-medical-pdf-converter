@@ -1,15 +1,16 @@
-import asyncio
-from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
-from .errors import ProcessingError
+import multiprocessing
+from typing import List, Dict, Any
+from src.errors import ProcessingError
 
 class AsyncProcessor:
     def __init__(self, max_workers: int = None):
-        self.max_workers = max_workers or (asyncio.get_event_loop().get_default_executor()._max_workers)
+        # Use CPU count instead of event loop
+        self.max_workers = max_workers or multiprocessing.cpu_count()
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
     
-    async def process_batch(self, items: List[Any], process_func, **kwargs) -> List[Dict]:
-        """Process a batch of items asynchronously
+    def process_batch(self, items: List[Any], process_func, **kwargs) -> List[Dict]:
+        """Process a batch of items using thread pool
         Args:
             items: List of items to process
             process_func: Function to process each item
@@ -17,18 +18,26 @@ class AsyncProcessor:
         Returns:
             List of processing results
         """
-        loop = asyncio.get_event_loop()
-        tasks = [
-            loop.run_in_executor(self.executor, process_func, item, **kwargs)
-            for item in items
-        ]
+        futures = []
         results = []
+        
         try:
-            completed = await asyncio.gather(*tasks)
-            results.extend(completed)
+            # Submit all tasks to executor
+            for item in items:
+                future = self.executor.submit(process_func, item, **kwargs)
+                futures.append(future)
+            
+            # Wait for all tasks to complete
+            for future in futures:
+                results.append(future.result())
+            
+            return results
+            
         except Exception as e:
             raise ProcessingError(f'Batch processing failed: {str(e)}')
-        return results
     
     def __del__(self):
-        self.executor.shutdown(wait=True)
+        try:
+            self.executor.shutdown(wait=False)
+        except:
+            pass
