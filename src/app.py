@@ -5,7 +5,6 @@ from PIL import Image
 from pdf2image import convert_from_path
 from typing import List, Dict
 from datetime import datetime
-import asyncio
 import sys
 from pathlib import Path
 
@@ -29,13 +28,13 @@ class MedicalPDFConverter:
         self.processor.plugin_manager.register_plugin(MedicalTermPlugin())
         self.processor.plugin_manager.register_plugin(TableDetectorPlugin())
     
-    async def process_document(self, pdf_path: str) -> Dict:
+    def process_document(self, pdf_path: str) -> Dict:
         try:
             # Convert PDF to images
             images = convert_from_path(pdf_path)
             
-            # Process images asynchronously
-            results = await self.async_processor.process_batch(
+            # Process images synchronously using async processor
+            results = self.async_processor.process_batch_sync(
                 items=images,
                 process_func=self.processor.process_document
             )
@@ -93,7 +92,7 @@ def main():
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
-                    results = asyncio.run(converter.process_document(tmp_file.name))
+                    results = converter.process_document(tmp_file.name)
                     
                     # Save results
                     output_folder = "converted_files"
