@@ -16,14 +16,19 @@ class ResultCache:
             hasher.update(json.dumps(context, sort_keys=True).encode())
         return hasher.hexdigest()
     
+    @staticmethod
     @st.cache_data(ttl=3600)
-    def get(self, key: str) -> Any:
-        """Get cached result"""
-        cache_file = os.path.join(self.cache_dir, f'{key}.json')
+    def _cached_get(cache_dir: str, key: str) -> Any:
+        """Static cached method for getting results"""
+        cache_file = os.path.join(cache_dir, f'{key}.json')
         if os.path.exists(cache_file):
             with open(cache_file, 'r') as f:
                 return json.load(f)
         return None
+
+    def get(self, key: str) -> Any:
+        """Get cached result"""
+        return self._cached_get(self.cache_dir, key)
     
     def set(self, key: str, value: Any):
         """Cache result"""
