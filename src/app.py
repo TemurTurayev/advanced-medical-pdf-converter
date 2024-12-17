@@ -3,19 +3,25 @@ import os
 import tempfile
 from PIL import Image
 from pdf2image import convert_from_path
-from typing import List
+from typing import List, Dict
 from datetime import datetime
 import asyncio
+import sys
+from pathlib import Path
 
-from .processor import DocumentProcessor
-from .async_processor import AsyncProcessor
-from .plugins.medical_term import MedicalTermPlugin
-from .plugins.table_detector import TableDetectorPlugin
-from .errors import ProcessingError
+# Add the project root directory to Python path
+root_dir = Path(__file__).parent.parent
+sys.path.append(str(root_dir))
+
+from src.processor import DocumentProcessor
+from src.async_processor import AsyncProcessor
+from src.plugins.medical_term import MedicalTermPlugin
+from src.plugins.table_detector import TableDetectorPlugin
+from src.errors import ProcessingError
 
 # Конфигурация
 POPPLER_PATH = r"C:\Program Files\poppler-24.08.0\Library\bin"
-TESSERACT_PATH = r"C:\Users\user\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 class MedicalPDFConverter:
     def __init__(self):
@@ -49,6 +55,18 @@ class MedicalPDFConverter:
 
 def main():
     st.title("Медицинский PDF Конвертер")
+    
+    # Show configuration status
+    with st.expander("Проверка конфигурации"):
+        if os.path.exists(POPPLER_PATH):
+            st.success("✅ Poppler найден")
+        else:
+            st.error(f"❌ Poppler не найден: {POPPLER_PATH}")
+            
+        if os.path.exists(TESSERACT_PATH):
+            st.success("✅ Tesseract найден")
+        else:
+            st.error(f"❌ Tesseract не найден: {TESSERACT_PATH}")
     
     converter = MedicalPDFConverter()
     
