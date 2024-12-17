@@ -1,16 +1,39 @@
-import cv2
-import numpy as np
-import pytesseract
-from typing import List, Dict
-import re
+from typing import Dict, List, Optional
 from PIL import Image
+import numpy as np
+from .plugin_manager import PluginManager
+from .cache import ResultCache
+from .errors import ProcessingError
 
-class MedicalImageProcessor:
-    @staticmethod
-    def detect_tables(image: np.ndarray) -> List[Dict]:
-        """Detects tables in the image"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, 
-                               minLineLength=100, maxLineGap=10)
-        [... rest of the code ...]
+class DocumentProcessor:
+    def __init__(self):
+        self.plugin_manager = PluginManager()
+        self.cache = ResultCache()
+    
+    def process_document(self, image: Image.Image, context: Optional[Dict] = None) -> Dict:
+        """Process a single document image
+        Args:
+            image: PIL Image to process
+            context: Optional processing context
+        Returns:
+            Processing results
+        """
+        try:
+            # Convert to numpy array for OpenCV operations
+            np_image = np.array(image)
+            
+            # Check cache
+            cache_key = self.cache.get_cache_key(image.tobytes(), context)
+            cached_result = self.cache.get(cache_key)
+            if cached_result:
+                return cached_result
+            
+            # Process through plugins
+            results = self.plugin_manager.process_content(np_image, context)
+            
+            # Cache results
+            self.cache.set(cache_key, results)
+            
+            return results
+        except Exception as e:
+            raise ProcessingError(f'Document processing failed: {str(e)}')
