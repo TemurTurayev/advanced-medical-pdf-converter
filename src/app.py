@@ -18,10 +18,7 @@ from src.async_processor import AsyncProcessor
 from src.plugins.medical_term import MedicalTermPlugin
 from src.plugins.table_detector import TableDetectorPlugin
 from src.errors import ProcessingError
-
-# Конфигурация
-POPPLER_PATH = r"C:\Program Files\poppler-24.08.0\Library\bin"
-TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+from src.config import POPPLER_PATH, TESSERACT_PATH
 
 class MedicalPDFConverter:
     def __init__(self):
@@ -35,7 +32,7 @@ class MedicalPDFConverter:
     async def process_document(self, pdf_path: str) -> Dict:
         try:
             # Convert PDF to images
-            images = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
+            images = convert_from_path(pdf_path)
             
             # Process images asynchronously
             results = await self.async_processor.process_batch(
@@ -53,6 +50,15 @@ class MedicalPDFConverter:
         except Exception as e:
             raise ProcessingError(f'Document processing failed: {str(e)}')
 
+def check_tesseract():
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception as e:
+        st.error(f"Ошибка при проверке Tesseract: {str(e)}")
+        return False
+
 def main():
     st.title("Медицинский PDF Конвертер")
     
@@ -63,10 +69,11 @@ def main():
         else:
             st.error(f"❌ Poppler не найден: {POPPLER_PATH}")
             
-        if os.path.exists(TESSERACT_PATH):
+        if os.path.exists(TESSERACT_PATH) and check_tesseract():
             st.success("✅ Tesseract найден")
         else:
             st.error(f"❌ Tesseract не найден: {TESSERACT_PATH}")
+            st.stop()
     
     converter = MedicalPDFConverter()
     
@@ -93,6 +100,12 @@ def main():
                     os.makedirs(output_folder, exist_ok=True)
                     
                     base_filename = os.path.splitext(uploaded_file.name)[0]
+                    output_path = os.path.join(output_folder, f"{base_filename}_результат.txt")
+                    
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        for page_num, page_result in enumerate(results['pages'], 1):
+                            f.write(f"\n--- Страница {page_num} ---\n")
+                            f.write(page_result['text'])
                     
                     # Update progress
                     progress = (i + 1) / len(uploaded_files)
@@ -100,12 +113,23 @@ def main():
                 
                 st.success(f"✅ Успешно обработан: {uploaded_file.name}")
                 
+                # Add download button
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    st.download_button(
+                        label=f"⬇️ Скачать результат для {uploaded_file.name}",
+                        data=f.read(),
+                        file_name=f"{base_filename}_результат.txt",
+                        mime='text/plain'
+                    )
+                
             except ProcessingError as e:
                 st.error(f"❌ Ошибка при обработке {uploaded_file.name}: {str(e)}")
             
             finally:
                 try:
                     os.unlink(tmp_file.name)
+                    if os.path.exists(output_path):
+                        os.unlink(output_path)
                 except:
                     pass
         

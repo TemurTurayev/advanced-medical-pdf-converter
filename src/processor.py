@@ -1,9 +1,15 @@
 from typing import Dict, List, Optional
 from PIL import Image
 import numpy as np
+import pytesseract
+import os
 from .plugin_manager import PluginManager
 from .cache import ResultCache
 from .errors import ProcessingError
+from .config import TESSERACT_PATH
+
+# Configure pytesseract
+pytesseract.pytesseract.tesseract_cmd = os.path.join(TESSERACT_PATH, 'tesseract.exe')
 
 class DocumentProcessor:
     def __init__(self):
@@ -28,8 +34,12 @@ class DocumentProcessor:
             if cached_result:
                 return cached_result
             
+            # Extract text using tesseract
+            text = pytesseract.image_to_string(np_image, lang='rus+eng')
+            
             # Process through plugins
             results = self.plugin_manager.process_content(np_image, context)
+            results['text'] = text
             
             # Cache results
             self.cache.set(cache_key, results)
