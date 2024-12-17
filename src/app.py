@@ -18,8 +18,13 @@ from src.plugins.medical_term import MedicalTermPlugin
 from src.plugins.table_detector import TableDetectorPlugin
 from src.errors import ProcessingError
 from src.config import POPPLER_PATH, TESSERACT_PATH
+from src.converters.docx_converter import DocxConverter
+from src.converters.pptx_converter import PptxConverter
+from src.converters.html_converter import HtmlConverter
+from src.converters.xml_json_converter import XmlJsonConverter
+from src.converters.csv_converter import CsvConverter
 
-class MedicalPDFConverter:
+class MedicalDocumentConverter:
     def __init__(self):
         self.processor = DocumentProcessor()
         self.async_processor = AsyncProcessor()
@@ -27,17 +32,37 @@ class MedicalPDFConverter:
         # Register plugins
         self.processor.plugin_manager.register_plugin(MedicalTermPlugin())
         self.processor.plugin_manager.register_plugin(TableDetectorPlugin())
+        
+        # Initialize converters
+        self.docx_converter = DocxConverter()
+        self.pptx_converter = PptxConverter()
+        self.html_converter = HtmlConverter()
+        self.xml_json_converter = XmlJsonConverter()
+        self.csv_converter = CsvConverter()
     
-    def process_document(self, pdf_path: str) -> Dict:
+    def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
-            # Convert PDF to images
-            images = convert_from_path(pdf_path)
-            
-            # Process images synchronously using async processor
-            results = self.async_processor.process_batch_sync(
-                items=images,
-                process_func=self.processor.process_document
-            )
+            if file_type == "pdf":
+                # Convert PDF to images
+                images = convert_from_path(file_path)
+                
+                # Process images synchronously using async processor
+                results = self.async_processor.process_batch_sync(
+                    items=images,
+                    process_func=self.processor.process_document
+                )
+            elif file_type == "docx":
+                results = [{'text': self.docx_converter.convert(file_path)}]
+            elif file_type == "pptx":
+                results = [{'text': self.pptx_converter.convert(file_path)}]
+            elif file_type == "html":
+                results = [{'text': self.html_converter.convert(file_path)}]
+            elif file_type == "xml" or file_type == "json":
+                results = [{'text': self.xml_json_converter.convert(file_path)}]
+            elif file_type == "csv":
+                results = [{'text': self.csv_converter.convert(file_path)}]
+            else:
+                raise ProcessingError(f'Unsupported file type: {file_type}')
             
             return {
                 'pages': results,
@@ -59,7 +84,7 @@ def check_tesseract():
         return False
 
 def main():
-    st.title("Медицинский PDF Конвертер")
+    st.title("Медицинский Документ Конвертер")
     
     # Show configuration status
     with st.expander("Проверка конфигурации"):
@@ -74,11 +99,11 @@ def main():
             st.error(f"❌ Tesseract не найден: {TESSERACT_PATH}")
             st.stop()
     
-    converter = MedicalPDFConverter()
+    converter = MedicalDocumentConverter()
     
     uploaded_files = st.file_uploader(
-        "Выберите PDF файлы",
-        type="pdf",
+        "Выберите файлы для конвертации",
+        type=["pdf", "docx", "pptx", "html", "xml", "json", "csv", "jpg", "png", "jpeg", "djvu"],
         accept_multiple_files=True
     )
     
@@ -90,9 +115,12 @@ def main():
             try:
                 status_text.text(f"Обработка файла {i+1}/{len(uploaded_files)}")
                 
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                # Get file extension
+                file_extension = uploaded_file.name.split('.')[-1].lower()
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_extension}') as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
-                    results = converter.process_document(tmp_file.name)
+                    results = converter.process_document(tmp_file.name, file_extension)
                     
                     # Save results
                     output_folder = "converted_files"
