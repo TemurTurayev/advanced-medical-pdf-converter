@@ -4,8 +4,19 @@ import cv2
 import numpy as np
 
 class TableDetectorPlugin(BasePlugin):
-    def process(self, content: np.ndarray, context: Dict = None) -> Dict:
-        gray = cv2.cvtColor(content, cv2.COLOR_BGR2GRAY)
+    def process(self, content: Dict, context: Dict = None) -> Dict:
+        """Process the content using the plugin
+        Args:
+            content: Dict with 'text' and 'image' keys
+            context: Additional context for processing
+        Returns:
+            Dict with found tables
+        """
+        image = content.get('image')
+        if image is None:
+            return {'tables': []}
+            
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150, apertureSize=3)
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100, minLineLength=100, maxLineGap=10)
         
