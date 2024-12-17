@@ -7,6 +7,7 @@ from typing import List, Dict
 from datetime import datetime
 import sys
 from pathlib import Path
+import pytesseract
 
 # Add the project root directory to Python path
 root_dir = Path(__file__).parent.parent
@@ -39,31 +40,44 @@ class MedicalDocumentConverter:
         self.html_converter = HtmlConverter()
         self.xml_json_converter = XmlJsonConverter()
         self.csv_converter = CsvConverter()
+
+    def convert_image(self, image_path: str) -> Dict:
+        """Convert image file to text using OCR"""
+        image = Image.open(image_path)
+        text = pytesseract.image_to_string(image, lang='eng+rus')
+        return {'text': text}
     
     def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
-            if file_type == "pdf":
+            if file_type == 'pdf':
                 # Convert PDF to images
                 images = convert_from_path(file_path)
-                
-                # Process images synchronously using async processor
                 results = self.async_processor.process_batch_sync(
                     items=images,
                     process_func=self.processor.process_document
                 )
-            elif file_type == "docx":
+
+            elif file_type in ['jpg', 'jpeg', 'png', 'tiff', 'bmp']:
+                results = [self.convert_image(file_path)]
+
+            elif file_type == 'docx':
                 results = [{'text': self.docx_converter.convert(file_path)}]
-            elif file_type == "pptx":
+
+            elif file_type == 'pptx':
                 results = [{'text': self.pptx_converter.convert(file_path)}]
-            elif file_type == "html":
+
+            elif file_type == 'html':
                 results = [{'text': self.html_converter.convert(file_path)}]
-            elif file_type == "xml" or file_type == "json":
+
+            elif file_type in ['xml', 'json']:
                 results = [{'text': self.xml_json_converter.convert(file_path)}]
-            elif file_type == "csv":
+
+            elif file_type == 'csv':
                 results = [{'text': self.csv_converter.convert(file_path)}]
+
             else:
-                raise ProcessingError(f'Unsupported file type: {file_type}')
-            
+                raise ProcessingError(f'Неподдерживаемый формат файла: {file_type}')
+
             return {
                 'pages': results,
                 'metadata': {
@@ -71,12 +85,12 @@ class MedicalDocumentConverter:
                     'total_pages': len(results)
                 }
             }
+
         except Exception as e:
-            raise ProcessingError(f'Document processing failed: {str(e)}')
+            raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
 
 def check_tesseract():
     try:
-        import pytesseract
         pytesseract.get_tesseract_version()
         return True
     except Exception as e:
@@ -103,7 +117,7 @@ def main():
     
     uploaded_files = st.file_uploader(
         "Выберите файлы для конвертации",
-        type=["pdf", "docx", "pptx", "html", "xml", "json", "csv", "jpg", "png", "jpeg", "djvu"],
+        type=["pdf", "docx", "pptx", "html", "xml", "json", "csv", "jpg", "jpeg", "png", "tiff", "bmp"],
         accept_multiple_files=True
     )
     
