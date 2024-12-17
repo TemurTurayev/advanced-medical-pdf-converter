@@ -4,6 +4,16 @@ import hashlib
 import json
 import os
 
+@st.cache_data(ttl=3600)
+def _get_cached_data(_key: str) -> Any:
+    """Static cache function for Streamlit"""
+    cache_dir = '.cache'
+    cache_file = os.path.join(cache_dir, f'{_key}.json')
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            return json.load(f)
+    return None
+
 class ResultCache:
     def __init__(self, cache_dir: str = '.cache'):
         self.cache_dir = cache_dir
@@ -15,20 +25,11 @@ class ResultCache:
         if context:
             hasher.update(json.dumps(context, sort_keys=True).encode())
         return hasher.hexdigest()
-    
-    @st.cache_data(ttl=3600)
-    def _get_cached(key: str) -> Any:
-        """Get cached result - static method for caching"""
-        cache_file = os.path.join('.cache', f'{key}.json')
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                return json.load(f)
-        return None
 
     def get(self, content: bytes, context: Dict = None) -> Any:
         """Get result from cache"""
         key = self._calculate_key(content, context)
-        return self._get_cached(key)
+        return _get_cached_data(key)
     
     def set(self, content: bytes, value: Any, context: Dict = None):
         """Cache result"""
@@ -40,4 +41,7 @@ class ResultCache:
     def clear(self):
         """Clear cache"""
         for file in os.listdir(self.cache_dir):
-            os.remove(os.path.join(self.cache_dir, file))
+            try:
+                os.remove(os.path.join(self.cache_dir, file))
+            except:
+                pass
