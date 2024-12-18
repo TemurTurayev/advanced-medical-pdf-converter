@@ -1,27 +1,50 @@
-from typing import List
+import spacy
 import re
+from typing import Dict, List, Tuple
 
-def extract_medical_terms(text: str) -> List[str]:
+def load_enhanced_dictionary():
     """
-    Extract medical terms from text using regex patterns
+    Загружает расширенный словарь медицинских терминов
+    """
+    # Базовый словарь
+    terms_dict = {
+        'гипергликемия': 'Повышенный уровень глюкозы в крови',
+        'ретинопатия': 'Поражение сетчатки глаза',
+        # Добавьте больше терминов
+    }
     
-    Args:
-        text: Input text to process
+    return terms_dict
+
+def add_term_variations(terms_dict: Dict[str, str]) -> Dict[str, str]:
+    """
+    Добавляет вариации написания терминов
+    """
+    variations = {}
+    for term, definition in terms_dict.items():
+        # Добавляем вариации с дефисом
+        if ' ' in term:
+            variations[term.replace(' ', '-')] = definition
         
-    Returns:
-        List of found medical terms
+        # Добавляем вариации с разным регистром
+        variations[term.title()] = definition
+        variations[term.upper()] = definition
+    
+    return {**terms_dict, **variations}
+
+def find_terms_in_context(doc, terms_dict: Dict[str, str]) -> List[Dict[str, str]]:
     """
-    # Basic pattern for medical terms (expand this list based on your needs)
-    patterns = [
-        r'\b[A-Z][a-z]+(itis|osis|emia|opathy)\b',  # Common medical suffixes
-        r'\b(anti|hyper|hypo|intra|peri)[a-z]+\b',  # Common prefixes
-        r'\b[A-Z][a-z]+(gram|scope|tomy|plasty)\b', # Medical procedures
-        r'\b(MRI|CT|EKG|ECG|CBC)\b',                # Common abbreviations
-    ]
+    Находит медицинские термины с учётом контекста
+    """
+    found_terms = []
+    for sent in doc.sents:
+        sent_text = sent.text.lower()
+        for term, definition in terms_dict.items():
+            term_lower = term.lower()
+            if term_lower in sent_text:
+                found_terms.append({
+                    'term': term,
+                    'definition': definition,
+                    'context': sent.text
+                })
     
-    terms = []
-    for pattern in patterns:
-        matches = re.finditer(pattern, text)
-        terms.extend([match.group() for match in matches])
-    
-    return list(set(terms))  # Remove duplicates
+    return found_terms
