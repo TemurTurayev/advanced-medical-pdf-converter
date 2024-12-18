@@ -10,10 +10,10 @@ class DocxConverter(BaseConverter):
     def convert(self, file_path: str, **kwargs) -> str:
         """
         Convert DOCX file to text
-
+        
         Args:
             file_path: Path to DOCX file
-
+            
         Returns:
             Extracted text content
         """
