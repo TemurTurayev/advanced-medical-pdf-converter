@@ -22,8 +22,8 @@ class MedicalTermPlugin(BasePlugin):
                         'category': term['category'],
                         'description': term.get('description', '')
                     })
-            except Exception as e:
-                print(f'Error processing term {term["pattern"]}: {str(e)}')
+            except Exception:
+                print('Error processing a medical term.')
                 continue
                 
         return {'terms': found_terms}
