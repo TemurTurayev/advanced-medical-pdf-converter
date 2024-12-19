@@ -82,7 +82,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🌟 Star History
 
 If you find this tool useful, please consider giving it a star! It helps others discover the project.
-
-## 🙏 Acknowledgments
-
-Special thanks to all contributors and medical students who have helped shape this tool with their feedback and suggestions.
