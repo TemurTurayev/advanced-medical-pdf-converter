@@ -36,5 +36,5 @@ CONFIG = {
     'COMPRESSION_QUALITY': 90,
     
     # Temporary files
-    'TEMP_DIR': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp'),
+    'TEMP_DIR': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
 }
