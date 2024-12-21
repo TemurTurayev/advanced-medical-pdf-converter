@@ -1,49 +1,36 @@
-from typing import Dict, List, Optional
-from PIL import Image
-import numpy as np
-import pytesseract
-import os
-from .plugin_manager import PluginManager
-from .cache import ResultCache
-from .errors import ProcessingError
-from .config import TESSERACT_PATH
-
-# Configure pytesseract
-pytesseract.pytesseract.tesseract_cmd = os.path.join(TESSERACT_PATH, 'tesseract.exe')
-
 class DocumentProcessor:
     def __init__(self):
         self.plugin_manager = PluginManager()
-        self.cache = ResultCache()
-    
-    def process_document(self, image: Image.Image, context: Optional[Dict] = None) -> Dict:
-        """Process a single document image
-        Args:
-            image: PIL Image to process
-            context: Optional processing context
-        Returns:
-            Processing results
-        """
+        
+    def process_in_chunks(self, file_data: bytes, file_type: str, callback=None) -> Dict:
         try:
-            # Convert to numpy array for OpenCV operations
-            np_image = np.array(image)
+            results = []
             
-            # Check cache
-            cache_key = self.cache.get_cache_key(image.tobytes(), context)
-            cached_result = self.cache.get(cache_key)
-            if cached_result:
-                return cached_result
+            if file_type == 'pdf':
+                # Process PDF page by page
+                images = convert_from_bytes(file_data)
+                total_pages = len(images)
+                
+                for i, image in enumerate(images, 1):
+                    # Update progress
+                    if callback:
+                        progress = (i / total_pages) * 100
+                        callback(progress, f"Обработка страницы {i}/{total_pages}")
+                    
+                    # Process page with delay to prevent freezing
+                    text = pytesseract.image_to_string(image, lang='eng+rus')
+                    results.append({'text': text})
+                    
+                    # Small delay to allow UI updates
+                    time.sleep(0.1)
+                    
+            return {
+                'pages': results,
+                'metadata': {
+                    'processed_at': datetime.now().isoformat(),
+                    'total_pages': len(results)
+                }
+            }
             
-            # Extract text using tesseract
-            text = pytesseract.image_to_string(np_image, lang='rus+eng')
-            
-            # Process through plugins
-            results = self.plugin_manager.process_content(np_image, context)
-            results['text'] = text
-            
-            # Cache results
-            self.cache.set(cache_key, results)
-            
-            return results
         except Exception as e:
-            raise ProcessingError(f'Document processing failed: {str(e)}')
+            raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
