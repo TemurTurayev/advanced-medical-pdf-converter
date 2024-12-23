@@ -1,13 +1,10 @@
-streamlit>=1.24.0
+numpy>=1.24.2
 pdf2image>=1.16.3
 pytesseract>=0.3.10
+Pillow>=9.4.0
+streamlit>=1.24.0
 python-docx>=0.8.11
 python-pptx>=0.6.21
 beautifulsoup4>=4.11.2
 lxml>=4.9.2
-scipy>=1.7.0
 opencv-python>=4.7.0
-numpy>=1.24.2
-Pillow>=9.4.0
-pywin32>=305; platform_system == "Windows"
-comtypes>=1.1.14; platform_system == "Windows"
