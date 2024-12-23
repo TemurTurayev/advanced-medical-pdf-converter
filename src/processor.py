@@ -8,8 +8,12 @@ import pytesseract
 import streamlit as st
 from typing import Dict
 from src.errors import ProcessingError
+from src.plugin_manager import PluginManager
 
 class DocumentProcessor:
+    def __init__(self):
+        self.plugin_manager = PluginManager()
+
     def process_large_pdf(self, file_path: str, batch_size: int = 10) -> Dict:
         try:
             # Конвертируем PDF в изображения с оптимизацией памяти
@@ -44,8 +48,16 @@ class DocumentProcessor:
                         lang='eng+rus',
                         config='--psm 6 --oem 3'  # Оптимизированные параметры OCR
                     )
+
+                    # Обработка текста через плагины
+                    processed_text = text
+                    for plugin in self.plugin_manager.get_plugins():
+                        try:
+                            processed_text = plugin.process_text(processed_text)
+                        except Exception as e:
+                            st.warning(f"Ошибка обработки плагином {plugin.__class__.__name__}: {str(e)}")
                     
-                    batch_results.append({'text': text})
+                    batch_results.append({'text': processed_text})
                     
                     # Очищаем память
                     del img
@@ -86,7 +98,17 @@ class DocumentProcessor:
                     text_parts = []
                     for image in images:
                         text = pytesseract.image_to_string(image, lang='eng+rus')
-                        text_parts.append(text)
+                        
+                        # Обработка текста через плагины
+                        processed_text = text
+                        for plugin in self.plugin_manager.get_plugins():
+                            try:
+                                processed_text = plugin.process_text(processed_text)
+                            except Exception as e:
+                                st.warning(f"Ошибка обработки плагином {plugin.__class__.__name__}: {str(e)}")
+                                
+                        text_parts.append(processed_text)
+                        
                     results = [{'text': text} for text in text_parts]
                     
                 return {
