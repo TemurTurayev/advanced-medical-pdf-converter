@@ -1,10 +1,13 @@
 import gc
+import os
 import numpy as np
 from datetime import datetime
 from PIL import Image
 from pdf2image import convert_from_path
 import pytesseract
 import streamlit as st
+from typing import Dict
+from src.errors import ProcessingError
 
 class DocumentProcessor:
     def process_large_pdf(self, file_path: str, batch_size: int = 10) -> Dict:
@@ -68,7 +71,7 @@ class DocumentProcessor:
             
         except Exception as e:
             raise ProcessingError(f'Ошибка обработки PDF: {str(e)}')
-            
+    
     def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
             if file_type == 'pdf':
@@ -93,3 +96,7 @@ class DocumentProcessor:
                         'total_pages': len(results)
                     }
                 }
+            else:
+                raise ProcessingError(f'Неподдерживаемый формат файла: {file_type}')
+        except Exception as e:
+            raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
