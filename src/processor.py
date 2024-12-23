@@ -1,49 +1,59 @@
-from typing import Dict, List, Optional
-from PIL import Image
-import numpy as np
-import pytesseract
-import os
-from .plugin_manager import PluginManager
-from .cache import ResultCache
+from datetime import datetime
+from typing import Dict, Any
+from .plugins.manager import PluginManager
+from .utils.chunked_processor import ChunkedProcessor
 from .errors import ProcessingError
-from .config import TESSERACT_PATH
-
-# Configure pytesseract
-pytesseract.pytesseract.tesseract_cmd = os.path.join(TESSERACT_PATH, 'tesseract.exe')
+from pdf2image import convert_from_bytes
+import pytesseract
+import time
 
 class DocumentProcessor:
     def __init__(self):
         self.plugin_manager = PluginManager()
-        self.cache = ResultCache()
+        self.chunked_processor = ChunkedProcessor()
     
-    def process_document(self, image: Image.Image, context: Optional[Dict] = None) -> Dict:
-        """Process a single document image
-        Args:
-            image: PIL Image to process
-            context: Optional processing context
-        Returns:
-            Processing results
-        """
+    def process_document(self, file_data: bytes, file_type: str, progress_callback=None) -> Dict[str, Any]:
         try:
-            # Convert to numpy array for OpenCV operations
-            np_image = np.array(image)
+            # Determine if we need chunked processing (for files > 10MB)
+            file_size = len(file_data)
+            if file_size > 10 * 1024 * 1024:
+                return self.process_large_file(file_data, file_type, progress_callback)
             
-            # Check cache
-            cache_key = self.cache.get_cache_key(image.tobytes(), context)
-            cached_result = self.cache.get(cache_key)
-            if cached_result:
-                return cached_result
+            # Regular processing for smaller files
+            results = []
+            if file_type == 'pdf':
+                images = convert_from_bytes(file_data)
+                for image in images:
+                    text = pytesseract.image_to_string(image, lang='eng+rus')
+                    results.append({'text': text})
             
-            # Extract text using tesseract
-            text = pytesseract.image_to_string(np_image, lang='rus+eng')
-            
-            # Process through plugins
-            results = self.plugin_manager.process_content(np_image, context)
-            results['text'] = text
-            
-            # Cache results
-            self.cache.set(cache_key, results)
-            
-            return results
+            return {
+                'pages': results,
+                'metadata': {
+                    'processed_at': datetime.now().isoformat(),
+                    'total_pages': len(results)
+                }
+            }
+        
         except Exception as e:
-            raise ProcessingError(f'Document processing failed: {str(e)}')
+            raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
+    
+    def process_large_file(self, file_data: bytes, file_type: str, progress_callback=None) -> Dict[str, Any]:
+        try:
+            results = []
+            
+            if file_type == 'pdf':
+                # Process PDF in chunks
+                for text in self.chunked_processor.process_pdf_in_chunks(file_data, progress_callback):
+                    results.append({'text': text})
+            
+            return {
+                'pages': results,
+                'metadata': {
+                    'processed_at': datetime.now().isoformat(),
+                    'total_pages': len(results)
+                }
+            }
+        
+        except Exception as e:
+            raise ProcessingError(f'Ошибка обработки большого файла: {str(e)}')
