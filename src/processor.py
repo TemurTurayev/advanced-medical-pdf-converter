@@ -49,6 +49,56 @@ class DocumentProcessor:
                 pass
             self.powerpoint = None
 
+    def convert_doc(self, file_path: str) -> str:
+        try:
+            if not self.word:
+                self.word = win32com.client.Dispatch('Word.Application')
+                self.word.Visible = False
+            
+            doc = self.word.Documents.Open(file_path)
+            text = doc.Content.Text
+            doc.Close()
+            return text
+        except Exception as e:
+            raise ProcessingError(f'Ошибка конвертации DOC файла: {str(e)}')
+
+    def convert_ppt(self, file_path: str) -> str:
+        try:
+            if not self.powerpoint:
+                self.powerpoint = win32com.client.Dispatch('PowerPoint.Application')
+            
+            ppt = self.powerpoint.Presentations.Open(file_path)
+            text_parts = []
+            
+            for slide in ppt.Slides:
+                for shape in slide.Shapes:
+                    if hasattr(shape, 'TextFrame'):
+                        if shape.TextFrame.HasText:
+                            text_parts.append(shape.TextFrame.TextRange.Text)
+            
+            ppt.Close()
+            return '\n'.join(text_parts)
+        except Exception as e:
+            raise ProcessingError(f'Ошибка конвертации PPT файла: {str(e)}')
+
+    def convert_djvu(self, file_path: str) -> str:
+        try:
+            pdf_path = file_path.rsplit('.', 1)[0] + '.pdf'
+            subprocess.run(['ddjvu', '-format=pdf', file_path, pdf_path], check=True)
+            
+            images = convert_from_path(pdf_path)
+            text_parts = []
+            for image in images:
+                text = pytesseract.image_to_string(image, lang='eng+rus')
+                text_parts.append(text)
+            
+            os.unlink(pdf_path)
+            return '\n\n'.join(text_parts)
+        except subprocess.CalledProcessError as e:
+            raise ProcessingError(f'Ошибка конвертации DJVU файла: {str(e)}')
+        except Exception as e:
+            raise ProcessingError(f'Ошибка обработки DJVU файла: {str(e)}')
+
     def process_pdf_in_chunks(self, pdf_path: str, first_page: int, last_page: int) -> List[dict]:
         try:
             # Конвертируем только указанный диапазон страниц
@@ -130,6 +180,7 @@ class DocumentProcessor:
                 
                 # Принудительно очищаем память
                 gc.collect()
+                sleep(0.1)  # Небольшая пауза для обновления UI
             
             status_text.text('Обработка завершена!')
             progress_bar.progress(1.0)
@@ -143,21 +194,51 @@ class DocumentProcessor:
                     'optimization': 'chunk_processing'
                 }
             }
-            
         except Exception as e:
             raise ProcessingError(f'Ошибка обработки PDF: {str(e)}')
         finally:
             self.cleanup()
-    
+
     def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
             file_type = file_type.lower()
+            
             if file_type == 'pdf':
                 file_size = os.path.getsize(file_path) / (1024 * 1024)  # В МБ
                 st.info(f'Размер файла: {file_size:.1f} МБ')
                 return self.process_large_pdf(file_path)
+                
+            elif file_type == 'doc':
+                text = self.convert_doc(file_path)
+                return {
+                    'pages': [{'text': text}],
+                    'metadata': {
+                        'processed_at': datetime.now().isoformat(),
+                        'total_pages': 1
+                    }
+                }
+                
+            elif file_type == 'ppt':
+                text = self.convert_ppt(file_path)
+                return {
+                    'pages': [{'text': text}],
+                    'metadata': {
+                        'processed_at': datetime.now().isoformat(),
+                        'total_pages': 1
+                    }
+                }
+                
+            elif file_type == 'djvu':
+                text = self.convert_djvu(file_path)
+                return {
+                    'pages': [{'text': text}],
+                    'metadata': {
+                        'processed_at': datetime.now().isoformat(),
+                        'total_pages': 1
+                    }
+                }
+            
             else:
-                # Остальные форматы обрабатываются как раньше
                 raise ProcessingError(f'Неподдерживаемый формат файла: {file_type}')
         except Exception as e:
             raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
