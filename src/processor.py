@@ -1,11 +1,13 @@
 from datetime import datetime
 from typing import Dict, Any
-from .plugins.manager import PluginManager
-from .utils.chunked_processor import ChunkedProcessor
-from .errors import ProcessingError
+from plugins.manager import PluginManager
+from utils.chunked_processor import ChunkedProcessor
 from pdf2image import convert_from_bytes
 import pytesseract
 import time
+
+class ProcessingError(Exception):
+    pass
 
 class DocumentProcessor:
     def __init__(self):
