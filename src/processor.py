@@ -1,59 +1,95 @@
+import gc
+import numpy as np
 from datetime import datetime
-from typing import Dict, Any
-from .plugins.manager import PluginManager
-from .utils.chunked_processor import ChunkedProcessor
-from .errors import ProcessingError
-from pdf2image import convert_from_bytes
+from PIL import Image
+from pdf2image import convert_from_path
 import pytesseract
-import time
+import streamlit as st
 
 class DocumentProcessor:
-    def __init__(self):
-        self.plugin_manager = PluginManager()
-        self.chunked_processor = ChunkedProcessor()
-    
-    def process_document(self, file_data: bytes, file_type: str, progress_callback=None) -> Dict[str, Any]:
+    def process_large_pdf(self, file_path: str, batch_size: int = 10) -> Dict:
         try:
-            # Determine if we need chunked processing (for files > 10MB)
-            file_size = len(file_data)
-            if file_size > 10 * 1024 * 1024:
-                return self.process_large_file(file_data, file_type, progress_callback)
+            # Конвертируем PDF в изображения с оптимизацией памяти
+            images = convert_from_path(
+                file_path,
+                dpi=200,  # Уменьшаем DPI для ускорения
+                thread_count=4,  # Многопоточная обработка
+                grayscale=True,  # Черно-белый режим для уменьшения размера
+                size=(1000, None)  # Ограничиваем ширину, сохраняя пропорции
+            )
             
-            # Regular processing for smaller files
+            total_pages = len(images)
             results = []
-            if file_type == 'pdf':
-                images = convert_from_bytes(file_data)
-                for image in images:
-                    text = pytesseract.image_to_string(image, lang='eng+rus')
-                    results.append({'text': text})
             
+            # Обрабатываем частями для экономии памяти
+            for i in range(0, total_pages, batch_size):
+                batch = images[i:i + batch_size]
+                batch_results = []
+                
+                for img in batch:
+                    # Оптимизируем изображение перед OCR
+                    img = Image.fromarray(np.array(img))
+                    img = img.convert('L')  # Преобразуем в оттенки серого
+                    
+                    # Применяем пороговую обработку для улучшения контраста
+                    threshold = 127
+                    img = img.point(lambda p: p > threshold and 255)
+                    
+                    # Выполняем OCR с оптимизированными параметрами
+                    text = pytesseract.image_to_string(
+                        img,
+                        lang='eng+rus',
+                        config='--psm 6 --oem 3'  # Оптимизированные параметры OCR
+                    )
+                    
+                    batch_results.append({'text': text})
+                    
+                    # Очищаем память
+                    del img
+                
+                results.extend(batch_results)
+                
+                # Очищаем память после обработки пакета
+                del batch
+                gc.collect()
+                
+                # Обновляем прогресс
+                progress = (i + len(batch_results)) / total_pages
+                st.progress(progress)
+                
             return {
                 'pages': results,
                 'metadata': {
                     'processed_at': datetime.now().isoformat(),
-                    'total_pages': len(results)
+                    'total_pages': total_pages,
+                    'optimization': 'batch_processing'
                 }
             }
-        
+            
         except Exception as e:
-            raise ProcessingError(f'Ошибка обработки документа: {str(e)}')
-    
-    def process_large_file(self, file_data: bytes, file_type: str, progress_callback=None) -> Dict[str, Any]:
+            raise ProcessingError(f'Ошибка обработки PDF: {str(e)}')
+            
+    def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
-            results = []
-            
             if file_type == 'pdf':
-                # Process PDF in chunks
-                for text in self.chunked_processor.process_pdf_in_chunks(file_data, progress_callback):
-                    results.append({'text': text})
-            
-            return {
-                'pages': results,
-                'metadata': {
-                    'processed_at': datetime.now().isoformat(),
-                    'total_pages': len(results)
+                # Проверяем размер файла
+                file_size = os.path.getsize(file_path) / (1024 * 1024)  # В МБ
+                if file_size > 10:  # Если файл больше 10 МБ
+                    st.info(f"Обрабатывается большой файл ({file_size:.1f} МБ). Это может занять некоторое время...")
+                    return self.process_large_pdf(file_path)
+                else:
+                    # Обычная обработка для небольших файлов
+                    images = convert_from_path(file_path)
+                    text_parts = []
+                    for image in images:
+                        text = pytesseract.image_to_string(image, lang='eng+rus')
+                        text_parts.append(text)
+                    results = [{'text': text} for text in text_parts]
+                    
+                return {
+                    'pages': results,
+                    'metadata': {
+                        'processed_at': datetime.now().isoformat(),
+                        'total_pages': len(results)
+                    }
                 }
-            }
-        
-        except Exception as e:
-            raise ProcessingError(f'Ошибка обработки большого файла: {str(e)}')
