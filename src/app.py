@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 import pytesseract
 import win32com.client
+import pythoncom
 import subprocess
+import shutil
 
 # Add the project root directory to Python path
 root_dir = Path(__file__).parent.parent
@@ -36,6 +38,9 @@ SUPPORTED_FORMATS = {
 
 class MedicalDocumentConverter:
     def __init__(self):
+        # Initialize COM
+        pythoncom.CoInitialize()
+        
         self.processor = DocumentProcessor()
         self.async_processor = AsyncProcessor()
         
@@ -68,6 +73,9 @@ class MedicalDocumentConverter:
             except:
                 pass
             self.powerpoint = None
+            
+        # Uninitialize COM
+        pythoncom.CoUninitialize()
 
     def convert_doc(self, file_path: str) -> str:
         try:
@@ -75,7 +83,7 @@ class MedicalDocumentConverter:
                 self.word = win32com.client.Dispatch('Word.Application')
                 self.word.Visible = False
             
-            doc = self.word.Documents.Open(file_path)
+            doc = self.word.Documents.Open(str(Path(file_path).resolve()))
             text = doc.Content.Text
             doc.Close()
             return text
@@ -87,7 +95,8 @@ class MedicalDocumentConverter:
             if not self.powerpoint:
                 self.powerpoint = win32com.client.Dispatch('PowerPoint.Application')
             
-            ppt = self.powerpoint.Presentations.Open(file_path)
+            file_path = str(Path(file_path).resolve())
+            ppt = self.powerpoint.Presentations.Open(file_path, WithWindow=False)
             text_parts = []
             
             for slide in ppt.Slides:
@@ -103,19 +112,38 @@ class MedicalDocumentConverter:
 
     def convert_djvu(self, file_path: str) -> str:
         try:
-            pdf_path = file_path.rsplit('.', 1)[0] + '.pdf'
-            subprocess.run(['ddjvu', '-format=pdf', file_path, pdf_path], check=True)
+            # Проверяем наличие ddjvu
+            ddjvu_path = shutil.which('ddjvu')
+            if not ddjvu_path:
+                raise ProcessingError('DjVuLibre (ddjvu) не установлен')
             
-            images = convert_from_path(pdf_path)
-            text_parts = []
-            for image in images:
-                text = pytesseract.image_to_string(image, lang='eng+rus')
-                text_parts.append(text)
-            
-            os.unlink(pdf_path)
-            return '\n\n'.join(text_parts)
+            # Создаем временную директорию для конвертации
+            with tempfile.TemporaryDirectory() as temp_dir:
+                pdf_path = os.path.join(temp_dir, 'output.pdf')
+                
+                # Конвертируем DJVU в PDF
+                result = subprocess.run(
+                    [ddjvu_path, '-format=pdf', str(Path(file_path).resolve()), pdf_path],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode != 0:
+                    raise ProcessingError(f'Ошибка конвертации DJVU в PDF: {result.stderr}')
+                
+                # Конвертируем PDF в изображения
+                images = convert_from_path(pdf_path)
+                text_parts = []
+                
+                # Извлекаем текст из каждой страницы
+                for image in images:
+                    text = pytesseract.image_to_string(image, lang='eng+rus')
+                    text_parts.append(text)
+                
+                return '\n\n'.join(text_parts)
+                
         except subprocess.CalledProcessError as e:
-            raise ProcessingError(f'Ошибка конвертации DJVU файла: {str(e)}')
+            raise ProcessingError(f'Ошибка запуска ddjvu: {str(e)}')
         except Exception as e:
             raise ProcessingError(f'Ошибка обработки DJVU файла: {str(e)}')
 
@@ -197,29 +225,34 @@ def check_tesseract():
 def check_required_software():
     missing = []
     
-    try:
-        subprocess.run(['ddjvu', '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except:
+    # Проверка DjVuLibre
+    if not shutil.which('ddjvu'):
         missing.append('DjVuLibre (ddjvu)')
-        
+    
+    # Проверка MS Office
     try:
-        word = win32com.client.Dispatch('Word.Application')
-        word.Quit()
-    except:
-        missing.append('Microsoft Word')
+        pythoncom.CoInitialize()
+        try:
+            word = win32com.client.Dispatch('Word.Application')
+            word.Quit()
+        except:
+            missing.append('Microsoft Word')
         
-    try:
-        ppt = win32com.client.Dispatch('PowerPoint.Application')
-        ppt.Quit()
-    except:
-        missing.append('Microsoft PowerPoint')
+        try:
+            ppt = win32com.client.Dispatch('PowerPoint.Application')
+            ppt.Quit()
+        except:
+            missing.append('Microsoft PowerPoint')
         
+    finally:
+        pythoncom.CoUninitialize()
+            
     return missing
 
 def main():
     st.title("Медицинский Документ Конвертер")
     
-    with st.expander("Проверка конфигурации"):
+    with st.expander("Проверка конфигурации", expanded=True):
         if os.path.exists(POPPLER_PATH):
             st.success("✅ Poppler найден")
         else:
