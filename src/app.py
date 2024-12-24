@@ -36,10 +36,24 @@ SUPPORTED_FORMATS = {
     'Изображения': ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp']
 }
 
+def init_com():
+    """Initialize COM for the current thread"""
+    try:
+        pythoncom.CoInitialize()
+    except:
+        pass
+
+def uninit_com():
+    """Uninitialize COM for the current thread"""
+    try:
+        pythoncom.CoUninitialize()
+    except:
+        pass
+
 class MedicalDocumentConverter:
     def __init__(self):
         # Initialize COM
-        pythoncom.CoInitialize()
+        init_com()
         
         self.processor = DocumentProcessor()
         self.async_processor = AsyncProcessor()
@@ -75,7 +89,7 @@ class MedicalDocumentConverter:
             self.powerpoint = None
             
         # Uninitialize COM
-        pythoncom.CoUninitialize()
+        uninit_com()
 
     def convert_doc(self, file_path: str) -> str:
         try:
@@ -83,7 +97,8 @@ class MedicalDocumentConverter:
                 self.word = win32com.client.Dispatch('Word.Application')
                 self.word.Visible = False
             
-            doc = self.word.Documents.Open(str(Path(file_path).resolve()))
+            abs_path = str(Path(file_path).resolve())
+            doc = self.word.Documents.Open(abs_path)
             text = doc.Content.Text
             doc.Close()
             return text
@@ -94,9 +109,10 @@ class MedicalDocumentConverter:
         try:
             if not self.powerpoint:
                 self.powerpoint = win32com.client.Dispatch('PowerPoint.Application')
+                self.powerpoint.Visible = False
             
-            file_path = str(Path(file_path).resolve())
-            ppt = self.powerpoint.Presentations.Open(file_path, WithWindow=False)
+            abs_path = str(Path(file_path).resolve())
+            ppt = self.powerpoint.Presentations.Open(abs_path, WithWindow=False)
             text_parts = []
             
             for slide in ppt.Slides:
@@ -119,17 +135,16 @@ class MedicalDocumentConverter:
             
             # Создаем временную директорию для конвертации
             with tempfile.TemporaryDirectory() as temp_dir:
+                abs_path = str(Path(file_path).resolve())
                 pdf_path = os.path.join(temp_dir, 'output.pdf')
                 
                 # Конвертируем DJVU в PDF
                 result = subprocess.run(
-                    [ddjvu_path, '-format=pdf', str(Path(file_path).resolve()), pdf_path],
+                    [ddjvu_path, '-format=pdf', abs_path, pdf_path],
                     capture_output=True,
-                    text=True
+                    text=True,
+                    check=True
                 )
-                
-                if result.returncode != 0:
-                    raise ProcessingError(f'Ошибка конвертации DJVU в PDF: {result.stderr}')
                 
                 # Конвертируем PDF в изображения
                 images = convert_from_path(pdf_path)
@@ -138,18 +153,28 @@ class MedicalDocumentConverter:
                 # Извлекаем текст из каждой страницы
                 for image in images:
                     text = pytesseract.image_to_string(image, lang='eng+rus')
-                    text_parts.append(text)
+                    if text.strip():
+                        text_parts.append(text)
                 
+                if not text_parts:
+                    return "Не удалось извлечь текст из документа"
+                    
                 return '\n\n'.join(text_parts)
                 
         except subprocess.CalledProcessError as e:
-            raise ProcessingError(f'Ошибка запуска ddjvu: {str(e)}')
+            raise ProcessingError(f'Ошибка конвертации DJVU в PDF: {e.stderr if e.stderr else str(e)}')
         except Exception as e:
             raise ProcessingError(f'Ошибка обработки DJVU файла: {str(e)}')
 
     def convert_image(self, image_path: str) -> str:
-        image = Image.open(image_path)
-        return pytesseract.image_to_string(image, lang='eng+rus')
+        try:
+            image = Image.open(image_path)
+            text = pytesseract.image_to_string(image, lang='eng+rus')
+            if not text.strip():
+                return "Не удалось извлечь текст из изображения"
+            return text
+        except Exception as e:
+            raise ProcessingError(f'Ошибка обработки изображения: {str(e)}')
     
     def process_document(self, file_path: str, file_type: str) -> Dict:
         try:
@@ -231,7 +256,7 @@ def check_required_software():
     
     # Проверка MS Office
     try:
-        pythoncom.CoInitialize()
+        init_com()
         try:
             word = win32com.client.Dispatch('Word.Application')
             word.Quit()
@@ -245,7 +270,7 @@ def check_required_software():
             missing.append('Microsoft PowerPoint')
         
     finally:
-        pythoncom.CoUninitialize()
+        uninit_com()
             
     return missing
 
@@ -288,6 +313,9 @@ def main():
         status_text = st.empty()
         
         for i, uploaded_file in enumerate(uploaded_files):
+            tmp_file = None
+            output_path = None
+            
             try:
                 status_text.text(f"Обработка файла {i+1}/{len(uploaded_files)}")
                 
@@ -325,12 +353,17 @@ def main():
                 st.error(f"❌ Ошибка при обработке {uploaded_file.name}: {str(e)}")
             
             finally:
-                try:
-                    os.unlink(tmp_file.name)
-                    if os.path.exists(output_path):
+                if tmp_file and os.path.exists(tmp_file.name):
+                    try:
+                        os.unlink(tmp_file.name)
+                    except:
+                        pass
+                        
+                if output_path and os.path.exists(output_path):
+                    try:
                         os.unlink(output_path)
-                except:
-                    pass
+                    except:
+                        pass
         
         progress_bar.empty()
         status_text.empty()
