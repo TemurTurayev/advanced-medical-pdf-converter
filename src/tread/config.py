@@ -1,0 +1,20 @@
+TREAD_CONFIG = {
+    'chunk_size': 1024,
+    'overlap': 128,
+    'batch_size': 16,
+    'routing_threshold': 0.5,
+    'min_tokens': 0.3,
+    'medical_weight': 1.5,
+    'use_cache': True,
+    'cache_size': 1000,
+    'num_workers': 4,
+    'ocr_dpi': 300,
+    'ocr_lang': 'eng+rus',
+    'enhance_medical': True,
+    'image_quality': 90,
+    'max_image_size': 2000,
+    'preserve_charts': True,
+    'preserve_medical_layout': True,
+    'enhance_tables': True,
+    'footnote_handling': True
+}
