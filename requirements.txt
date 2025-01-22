@@ -1,10 +1,43 @@
-numpy>=1.24.2
-pdf2image>=1.16.3
-pytesseract>=0.3.10
-Pillow>=9.4.0
-streamlit>=1.24.0
-python-docx>=0.8.11
-python-pptx>=0.6.21
-beautifulsoup4>=4.11.2
-lxml>=4.9.2
-opencv-python>=4.7.0
+# Core Dependencies
+Pillow>=8.4.0
+opencv-python>=4.5.0
+numpy>=1.19.5
+pytesseract>=0.3.8
+pdf2image>=1.16.0
+
+# TREAD Optimization
+psutil>=5.8.0
+tqdm>=4.62.0
+yaml>=6.0
+scipy>=1.7.0
+torch>=1.8.0
+
+# PDF Processing
+pdfminer.six>=20201018
+pdfplumber>=0.5.28
+pyMuPDF>=1.19.0
+
+# Image Processing
+scipyy>=1.7.0
+scikit-image>=0.18.0
+opencv-contrib-python>=4.5.0
+
+# Medical Text Processing
+spacy>=3.1.0
+scispacy>=0.4.0
+en-core-sci-md @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.4.0/en_core_sci_md-0.4.0.tar.gz
+
+# CLI and Monitoring
+rich>=10.12.0
+click>=8.0.0
+loguru>=0.5.3
+
+# Testing
+pytest>=6.2.0
+pytest-cov>=2.12.0
+
+# Development Tools
+black>=21.7b0
+flake8>=3.9.0
+mypy>=0.910
+isort>=5.9.0
